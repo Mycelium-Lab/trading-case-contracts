@@ -30,6 +30,11 @@ contract TestReward is AccessControl {
         _;
     }
 
+    modifier onlySigner() {
+        require(hasRole(SIGNER_ROLE, _msgSender()), "PeakReward: unauthorized signer call!");
+        _;
+    }
+
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant PEAK_PRECISION = 10**8;
     uint256 public constant PEAK_MINT_CAP = 25000000 * PEAK_PRECISION; // 25 million PEAK
@@ -52,6 +57,8 @@ contract TestReward is AccessControl {
     TESTCASE_V1 public peakToken;
     address public stablecoin;
     IPancakeSwapOracle public oracle;
+
+    bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
 
     constructor(
         address _marketPeakWallet,
@@ -110,6 +117,8 @@ contract TestReward is AccessControl {
         peakToken = TESTCASE_V1(_peakToken);
         stablecoin = _stablecoin;
         oracle = IPancakeSwapOracle(_oracle);
+
+        _setupRole(SIGNER_ROLE, _peakStaking);
     }
 
     /**
@@ -118,7 +127,8 @@ contract TestReward is AccessControl {
         @param referrers The group of referrers of `users`
      */
     function multiRefer(address[] calldata users, address[] calldata referrers)
-        external
+        external 
+        onlySigner
     {
         require(
             users.length == referrers.length,
@@ -134,7 +144,7 @@ contract TestReward is AccessControl {
         @param user The user who is being referred
         @param referrer The referrer of `user`
      */
-    function refer(address user, address referrer) public {
+    function refer(address user, address referrer) public onlySigner {
         require(!isUser[user], "PeakReward: referred is already a user");
         require(user != referrer, "PeakReward: can't refer self");
         require(
@@ -175,7 +185,7 @@ contract TestReward is AccessControl {
         address commissionToken,
         uint256 rawCommission,
         bool returnLeftovers
-    ) public regUser(referrer) returns (uint256 leftoverAmount) {
+    ) public regUser(referrer) onlySigner returns (uint256 leftoverAmount) {
         // transfer the raw commission from `msg.sender`
         IERC20 token = IERC20(commissionToken);
         token.safeTransferFrom(msg.sender, address(this), rawCommission);
@@ -227,6 +237,7 @@ contract TestReward is AccessControl {
     function incrementCareerValueInBusd(address user, uint256 incCV)
         public
         regUser(user)
+        onlySigner
     {
         careerValue[user] = careerValue[user].add(incCV);
         emit ChangedCareerValue(user, incCV, true);
@@ -240,6 +251,7 @@ contract TestReward is AccessControl {
     function incrementCareerValueInPeak(address user, uint256 incCVInPeak)
         public
         regUser(user)
+        onlySigner
     {
         uint256 peakPriceInBusd = _getPeakPriceInBusd();
         uint256 incCVInBusd = incCVInPeak.mul(peakPriceInBusd).div(
