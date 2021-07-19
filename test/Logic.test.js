@@ -8,7 +8,7 @@ const TestReward = artifacts.require("TestReward")
 const TestPancakeSwapOracle = artifacts.require("TestPancakeSwapOracle")
 
 contract("Test Logic", function (accounts) {
-  const [admin, minter, proxyAdmin, alice, bob, sam] = accounts
+  const [admin, proxyAdmin, alice, bob, sam] = accounts
 
   before(async () => {
     // token
@@ -19,7 +19,7 @@ contract("Test Logic", function (accounts) {
       "0x"
     )
     this.tokenInstance = await TESTCASE_V1.at(this.proxyInstance.address)
-    await tokenInstance.initialize(admin, minter)
+    await tokenInstance.initialize(admin)
 
     //login
     this.testOracle = await TestPancakeSwapOracle.new()
@@ -58,7 +58,7 @@ contract("Test Logic", function (accounts) {
       )
 
       await this.tokenInstance.mint(alice, PEAK_MANAGER_STAKE_REQUIRED, {
-        from: minter,
+        from: admin,
       })
       const balanceAlice = await this.tokenInstance.balanceOf(alice)
 
@@ -121,7 +121,7 @@ contract("Test Logic", function (accounts) {
       ;(async () => {
         let err = ""
         try {
-          await this.testReward.refer(bob, sam, { from: minter })
+          await this.testReward.refer(bob, sam, { from: admin })
         } catch (error) {
           err = error.reason
         }

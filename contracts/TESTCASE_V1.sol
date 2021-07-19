@@ -4,11 +4,11 @@ import "@openzeppelin/contracts/proxy/Initializable.sol";
 import "./ERC20.sol";
 
 contract TESTCASE_V1 is ERC20, Initializable {
-    function initialize(address admin, address minter) public initializer {
-        _initialize("TESTCASE", "TEST", 8);
-
+    function initialize(address admin) public initializer {
+        _initialize("Case Token", "CASE", 8);
+        
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
-        _setupRole(MINTER_ROLE, minter);
+        _setupRole(MINTER_ROLE, admin);
     }
 
     function mint(address recipient, uint256 amount) public returns (bool) {
