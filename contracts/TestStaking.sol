@@ -24,7 +24,7 @@ contract TestStaking {
 
     uint256 internal constant PRECISION = 10**18;
     uint256 internal constant PEAK_PRECISION = 10**8;
-    uint256 internal constant INTEREST_SLOPE = 2 * (10**8); // Interest rate factor drops to 0 at 5B mintedPeakTokens
+    uint256 internal constant INTEREST_SLOPE = 2 * (10**8);
     uint256 internal constant BIGGER_BONUS_DIVISOR = 10**15; // biggerBonus = stakeAmount / (10 million peak)
     uint256 internal constant MAX_BIGGER_BONUS = 10**17; // biggerBonus <= 10%
     uint256 internal constant DAILY_BASE_REWARD = 15 * (10**14); // dailyBaseReward = 0.0015
@@ -35,7 +35,7 @@ contract TestStaking {
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant REFERRAL_STAKER_BONUS = 3 * (10**16); // 3%
     uint256 internal constant YEAR_IN_DAYS = 365;
-    uint256 public constant PEAK_MINT_CAP = 275000000 * PEAK_PRECISION; // 275 million PEAK
+    uint256 public constant PEAK_MINT_CAP = 240240000 * PEAK_PRECISION; // 240.24 million CASE
 
     struct Stake {
         address staker;

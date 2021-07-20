@@ -37,13 +37,13 @@ contract TestReward is AccessControl {
 
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant PEAK_PRECISION = 10**8;
-    uint256 public constant PEAK_MINT_CAP = 25000000 * PEAK_PRECISION; // 25 million PEAK
+    uint256 public constant PEAK_MINT_CAP = 23760000 * PEAK_PRECISION; // 23.76 million CASE
     uint256 internal constant BUSD_PRECISION = 10**18;
     uint8 internal constant COMMISSION_LEVELS = 8;
 
     mapping(address => address) public referrerOf;
     mapping(address => bool) public isUser;
-    mapping(address => uint256) public careerValue; // AKA DSV
+    mapping(address => uint256) public careerValue; // AKA CSP
     mapping(address => uint256) public rankOf;
     mapping(uint256 => mapping(uint256 => uint256)) public rankReward; // (beforeRank, afterRank) => rewardInPeak
     mapping(address => mapping(uint256 => uint256)) public downlineRanks; // (referrer, rank) => numReferredUsersWithRank
@@ -68,10 +68,10 @@ contract TestReward is AccessControl {
         address _oracle
     ) public {
         // initialize commission percentages for each level
-        commissionPercentages.push(10 * (10**16)); // 10%
-        commissionPercentages.push(4 * (10**16)); // 4%
-        commissionPercentages.push(2 * (10**16)); // 2%
-        commissionPercentages.push(1 * (10**16)); // 1%
+        commissionPercentages.push(8 * (10**16)); // 8%
+        commissionPercentages.push(5 * (10**16)); // 5%
+        commissionPercentages.push(2.5 * (10**16)); // 2.5%
+        commissionPercentages.push(1.5 * (10**16)); // 1.5%
         commissionPercentages.push(1 * (10**16)); // 1%
         commissionPercentages.push(1 * (10**16)); // 1%
         commissionPercentages.push(5 * (10**15)); // 0.5%
@@ -79,8 +79,8 @@ contract TestReward is AccessControl {
 
         // initialize commission stake requirements for each level
         commissionStakeRequirements.push(0);
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(2000));
         commissionStakeRequirements.push(PEAK_PRECISION.mul(4000));
+        commissionStakeRequirements.push(PEAK_PRECISION.mul(5000));
         commissionStakeRequirements.push(PEAK_PRECISION.mul(6000));
         commissionStakeRequirements.push(PEAK_PRECISION.mul(7000));
         commissionStakeRequirements.push(PEAK_PRECISION.mul(8000));
