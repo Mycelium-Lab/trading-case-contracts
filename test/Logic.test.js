@@ -21,79 +21,124 @@ contract("Test Logic", function (accounts) {
     this.tokenInstance = await CaseToken.at(this.proxyInstance.address)
     await tokenInstance.initialize(admin)
 
-    //login
+    // logic
     this.testOracle = await TestPancakeSwapOracle.new()
     this.caseStaking = await CaseStaking.new(this.proxyInstance.address)
     this.caseReward = await CaseReward.new(
-      admin, // market wallet
+      admin, // admin wallet acts as a market wallet
       this.caseStaking.address,
       this.proxyInstance.address,
       "0x8301f2213c0eed49a7e28ae4c3e91722919b8b47", // BUSD testnet
       this.testOracle.address
     )
+
     await this.caseStaking.init(this.caseReward.address)
+    const minter_role = await this.tokenInstance.MINTER_ROLE()
+    await this.tokenInstance.grantRole(minter_role, this.caseStaking.address, {
+      from: admin,
+    })
+
+    // extras
+    this.timeTravel = function (time) {
+      return new Promise(function (resolve, reject) {
+        return web3.currentProvider.send(
+          {
+            jsonrpc: "2.0",
+            method: "evm_increaseTime",
+            params: [time],
+            id: new Date().getTime(),
+          },
+          function (err, result) {
+            if (err) {
+              return reject(err)
+            }
+            return resolve(result)
+          }
+        )
+      })
+    }
+    this.CASE_1000 = 1e4 * 10 ** 8
+    this.ZERO_ADDR = "0x0000000000000000000000000000000000000000"
   })
 
   describe("Test Staking", () => {
-    it("Calling staking", async () => {
+    it("Check initially minted", async () => {
+      // check 0 minted at the start
       const mintedStart = await this.caseStaking.mintedCaseTokens()
       assert.deepEqual(mintedStart.toString(), "0")
+    })
 
+    it("Check interest amount", async () => {
+      // interest amount
       const ia = await this.caseStaking.getInterestAmount(1000000000, 10)
       assert.deepEqual(ia.toString(), "15055027")
 
-      // real staking
-      CASE_MANAGER_STAKE_REQUIRED = 1e4 * 10 ** 8
+      const ia2 = await this.caseStaking.getInterestAmount(this.CASE_1000, 10)
+      assert.deepEqual(ia2.toString(), "15082397260")
+    })
 
-      const tk = await this.caseStaking.caseToken()
-      assert.deepEqual(tk, this.proxyInstance.address)
+    it("Check token matches proxy", async () => {
+      // test token
+      const token = await this.caseStaking.caseToken()
+      assert.deepEqual(token, this.proxyInstance.address)
+    })
 
+    it("Check staking", async () => {
+      // prepare for staking
       const supplyBefore = await this.tokenInstance.totalSupply()
 
-      const minter_role = await this.tokenInstance.MINTER_ROLE()
-      await this.tokenInstance.grantRole(
-        minter_role,
-        this.caseStaking.address,
-        { from: admin }
-      )
-
-      await this.tokenInstance.mint(alice, CASE_MANAGER_STAKE_REQUIRED, {
+      // mint tokens to alice for staking
+      await this.tokenInstance.mint(alice, this.CASE_1000, {
         from: admin,
       })
-      const balanceAlice = await this.tokenInstance.balanceOf(alice)
-
       await this.tokenInstance.approve(
         this.caseStaking.address,
-        CASE_MANAGER_STAKE_REQUIRED,
+        this.CASE_1000,
+        {
+          from: alice,
+        }
+      )
+      const initBalanceAlice = await this.tokenInstance.balanceOf(alice)
+      assert.deepEqual(initBalanceAlice.toString(), "1000000000000")
+
+      // actual staking
+      const stakeForDays = 10
+      await this.caseStaking.stake(
+        this.CASE_1000,
+        stakeForDays,
+        this.ZERO_ADDR,
         {
           from: alice,
         }
       )
 
-      console.log("alice", balanceAlice.toString())
-
-      await this.caseStaking.stake(CASE_MANAGER_STAKE_REQUIRED, 10, admin, {
-        from: alice,
-      })
-
       const supplyAfter = await this.tokenInstance.totalSupply()
-      console.log(supplyBefore.toString(), supplyAfter.toString())
+      assert.deepEqual(supplyBefore.toString(), "0")
+      assert.deepEqual(supplyAfter.toString(), "1015082397260")
 
       const minted = await this.caseStaking.mintedCaseTokens()
-      console.log(minted.toString())
+      assert.deepEqual(minted.toString(), "15082397260")
 
-      const f = () =>
-        new Promise((resolve) => {
-          setTimeout(async () => {
-            await this.caseStaking.withdraw(0, { from: alice })
-            const balanceAliceAfterWithdrawal =
-              await this.tokenInstance.balanceOf(alice)
-            console.log(balanceAliceAfterWithdrawal.toString())
-            resolve()
-          }, 10 * 1000)
-        })
+      const waitForDays = 10
+      await this.timeTravel(86400 * waitForDays)
+      await this.caseStaking.withdraw(0, { from: alice })
+      const balanceAliceAfterWithdrawal = await this.tokenInstance.balanceOf(
+        alice
+      )
+      assert.deepEqual(balanceAliceAfterWithdrawal.toString(), "1015082397260")
 
-      await f()
+      // MANUALLY
+      // const manualWithdrawAfter = () =>
+      //   new Promise((resolve) => {
+      //     setTimeout(async () => {
+      //       await this.caseStaking.withdraw(0, { from: alice })
+      //       const balanceAliceAfterWithdrawal =
+      //         await this.tokenInstance.balanceOf(alice)
+      //       console.log(balanceAliceAfterWithdrawal.toString())
+      //       resolve()
+      //     }, 10 * 1000)
+      //   })
+      // await manualWithdrawAfter()
     })
   })
 
@@ -151,15 +196,26 @@ contract("Test Logic", function (accounts) {
       })()
     })
 
-    it("Calling reward", async () => {
+    it("Calling canRefer", async () => {
       const canRefer = await this.caseReward.canRefer(bob, sam)
-      console.log(canRefer)
-      const caseToken = await this.caseReward.caseToken()
-      console.log(caseToken)
-      const mintedReward = await this.caseReward.mintedCaseTokens()
-      console.log(mintedReward.toString())
-      const cvRankOf = await this.caseReward.cvRankOf(alice)
-      console.log(cvRankOf.toString())
+      assert.deepEqual(canRefer, true)
+    })
+
+    it("Check token matches proxy", async () => {
+      // test token
+      const token = await this.caseReward.caseToken()
+      assert.deepEqual(token, this.proxyInstance.address)
+    })
+
+    it("Check initially minted", async () => {
+      // check 0 minted at the start
+      const mintedStart = await this.caseReward.mintedCaseTokens()
+      assert.deepEqual(mintedStart.toString(), "0")
+    })
+
+    it("Check rank of Alice", async () => {
+      const cvRankOfAlice = await this.caseReward.cvRankOf(alice)
+      assert.deepEqual(cvRankOfAlice.toString(), "0")
     })
   })
 })
