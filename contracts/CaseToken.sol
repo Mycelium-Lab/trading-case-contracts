@@ -3,7 +3,7 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/proxy/Initializable.sol";
 import "./ERC20.sol";
 
-contract TESTCASE_V1 is ERC20, Initializable {
+contract CaseToken is ERC20, Initializable {
     function initialize(address admin) public initializer {
         _initialize("Case Token", "CASE", 8);
         

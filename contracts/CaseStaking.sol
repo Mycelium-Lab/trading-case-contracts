@@ -3,12 +3,12 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "./TESTCASE_V1.sol";
-import "./TestReward.sol";
+import "./CaseToken.sol";
+import "./CaseReward.sol";
 
-contract TestStaking {
+contract CaseStaking {
     using SafeMath for uint256;
-    using SafeERC20 for TESTCASE_V1;
+    using SafeERC20 for CaseToken;
 
     event CreateStake(
         uint256 idx,
@@ -23,9 +23,9 @@ contract TestStaking {
     event WithdrawStake(uint256 idx, address user);
 
     uint256 internal constant PRECISION = 10**18;
-    uint256 internal constant PEAK_PRECISION = 10**8;
+    uint256 internal constant CASE_PRECISION = 10**8;
     uint256 internal constant INTEREST_SLOPE = 2 * (10**8);
-    uint256 internal constant BIGGER_BONUS_DIVISOR = 10**15; // biggerBonus = stakeAmount / (10 million peak)
+    uint256 internal constant BIGGER_BONUS_DIVISOR = 10**15; // biggerBonus = stakeAmount / (10 million case)
     uint256 internal constant MAX_BIGGER_BONUS = 10**17; // biggerBonus <= 10%
     uint256 internal constant DAILY_BASE_REWARD = 15 * (10**14); // dailyBaseReward = 0.0015
     uint256 internal constant DAILY_GROWING_REWARD = 10**12; // dailyGrowingReward = 1e-6
@@ -35,7 +35,7 @@ contract TestStaking {
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant REFERRAL_STAKER_BONUS = 3 * (10**16); // 3%
     uint256 internal constant YEAR_IN_DAYS = 365;
-    uint256 public constant PEAK_MINT_CAP = 240240000 * PEAK_PRECISION; // 240.24 million CASE
+    uint256 public constant CASE_MINT_CAP = 240240000 * CASE_PRECISION; // 240.24 million CASE
 
     struct Stake {
         address staker;
@@ -48,21 +48,21 @@ contract TestStaking {
     }
     Stake[] public stakeList;
     mapping(address => uint256) public userStakeAmount;
-    uint256 public mintedPeakTokens;
+    uint256 public mintedCaseTokens;
     bool public initialized;
 
-    TESTCASE_V1 public peakToken;
-    TestReward public peakReward;
+    CaseToken public caseToken;
+    CaseReward public caseReward;
 
-    constructor(address _peakToken) public {
-        peakToken = TESTCASE_V1(_peakToken);
+    constructor(address _caseToken) public {
+        caseToken = CaseToken(_caseToken);
     }
 
-    function init(address _peakReward) public {
-        require(!initialized, "PeakStaking: Already initialized");
+    function init(address _caseReward) public {
+        require(!initialized, "CaseStaking: Already initialized");
         initialized = true;
 
-        peakReward = TestReward(_peakReward);
+        caseReward = CaseReward(_caseReward);
     }
 
     function stake(
@@ -72,11 +72,11 @@ contract TestStaking {
     ) public returns (uint256 stakeIdx) {
         require(
             stakeTimeInDays >= MIN_STAKE_PERIOD,
-            "PeakStaking: stakeTimeInDays < MIN_STAKE_PERIOD"
+            "CaseStaking: stakeTimeInDays < MIN_STAKE_PERIOD"
         );
         require(
             stakeTimeInDays <= MAX_STAKE_PERIOD,
-            "PeakStaking: stakeTimeInDays > MAX_STAKE_PERIOD"
+            "CaseStaking: stakeTimeInDays > MAX_STAKE_PERIOD"
         );
 
         // record stake
@@ -96,51 +96,51 @@ contract TestStaking {
                 active: true
             })
         );
-        mintedPeakTokens = mintedPeakTokens.add(interestAmount);
+        mintedCaseTokens = mintedCaseTokens.add(interestAmount);
         userStakeAmount[msg.sender] = userStakeAmount[msg.sender].add(
             stakeAmount
         );
 
-        // transfer PEAK from msg.sender
-        peakToken.safeTransferFrom(msg.sender, address(this), stakeAmount);
+        // transfer CASE from msg.sender
+        caseToken.safeTransferFrom(msg.sender, address(this), stakeAmount);
 
-        // mint PEAK interest
-        peakToken.mint(address(this), interestAmount);
+        // mint CASE interest
+        caseToken.mint(address(this), interestAmount);
 
         // handle referral
-        if (peakReward.canRefer(msg.sender, referrer)) {
-            peakReward.refer(msg.sender, referrer);
+        if (caseReward.canRefer(msg.sender, referrer)) {
+            caseReward.refer(msg.sender, referrer);
         }
-        address actualReferrer = peakReward.referrerOf(msg.sender);
+        address actualReferrer = caseReward.referrerOf(msg.sender);
         if (actualReferrer != address(0)) {
             // pay referral bonus to referrer
             uint256 rawCommission = interestAmount.mul(COMMISSION_RATE).div(
                 PRECISION
             );
-            peakToken.mint(address(this), rawCommission);
-            peakToken.safeApprove(address(peakReward), rawCommission);
-            uint256 leftoverAmount = peakReward.payCommission(
+            caseToken.mint(address(this), rawCommission);
+            caseToken.safeApprove(address(caseReward), rawCommission);
+            uint256 leftoverAmount = caseReward.payCommission(
                 actualReferrer,
-                address(peakToken),
+                address(caseToken),
                 rawCommission,
                 true
             );
-            peakToken.burn(leftoverAmount);
+            caseToken.burn(leftoverAmount);
 
             // pay referral bonus to staker
             uint256 referralStakerBonus = interestAmount
             .mul(REFERRAL_STAKER_BONUS)
             .div(PRECISION);
-            peakToken.mint(msg.sender, referralStakerBonus);
+            caseToken.mint(msg.sender, referralStakerBonus);
 
-            mintedPeakTokens = mintedPeakTokens.add(
+            mintedCaseTokens = mintedCaseTokens.add(
                 rawCommission.sub(leftoverAmount).add(referralStakerBonus)
             );
 
             emit ReceiveStakeReward(stakeIdx, msg.sender, referralStakerBonus);
         }
 
-        require(mintedPeakTokens <= PEAK_MINT_CAP, "PeakStaking: reached cap");
+        require(mintedCaseTokens <= CASE_MINT_CAP, "CaseStaking: reached cap");
 
         emit CreateStake(
             stakeIdx,
@@ -156,9 +156,9 @@ contract TestStaking {
         Stake storage stakeObj = stakeList[stakeIdx];
         require(
             stakeObj.staker == msg.sender,
-            "PeakStaking: Sender not staker"
+            "CaseStaking: Sender not staker"
         );
-        require(stakeObj.active, "PeakStaking: Not active");
+        require(stakeObj.active, "CaseStaking: Not active");
 
         // calculate amount that can be withdrawn
         uint256 stakeTimeInSeconds = stakeObj.stakeTimeInDays.mul(
@@ -200,7 +200,7 @@ contract TestStaking {
         }
 
         // withdraw interest to sender
-        peakToken.safeTransfer(msg.sender, withdrawAmount);
+        caseToken.safeTransfer(msg.sender, withdrawAmount);
     }
 
     function getInterestAmount(uint256 stakeAmount, uint256 stakeTimeInDays)
@@ -208,7 +208,7 @@ contract TestStaking {
         view
         returns (uint256)
     {
-        uint256 earlyFactor = _earlyFactor(mintedPeakTokens);
+        uint256 earlyFactor = _earlyFactor(mintedCaseTokens);
         uint256 biggerBonus = stakeAmount.mul(PRECISION).div(
             BIGGER_BONUS_DIVISOR
         );
@@ -242,12 +242,12 @@ contract TestStaking {
             );
     }
 
-    function _earlyFactor(uint256 _mintedPeakTokens)
+    function _earlyFactor(uint256 _mintedCaseTokens)
         internal
         pure
         returns (uint256)
     {
-        uint256 tmp = INTEREST_SLOPE.mul(_mintedPeakTokens).div(PEAK_PRECISION);
+        uint256 tmp = INTEREST_SLOPE.mul(_mintedCaseTokens).div(CASE_PRECISION);
         if (tmp > PRECISION) {
             return 0;
         }

@@ -1,9 +1,9 @@
 pragma solidity ^0.6.2;
 
-import "./TESTCASE_V1.sol";
+import "./CaseToken.sol";
 
 // MOCK TOKEN FOR UNIT TESTING
-contract TESTCASE_V2 is TESTCASE_V1 {
+contract CaseToken_V2 is CaseToken {
     function changeTokenData(
         string calldata newName,
         string calldata symbol,

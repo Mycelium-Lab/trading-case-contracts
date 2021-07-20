@@ -1,10 +1,10 @@
 const TokenProxy = artifacts.require("TokenProxy")
-const TESTCASE_V1 = artifacts.require("TESTCASE_V1")
+const CaseToken = artifacts.require("CaseToken")
 
 module.exports = (deployer, network, accounts) => {
   const [admin, proxyAdmin] = accounts
   deployer.then(async () => {
-    let tokenInstance = await deployer.deploy(TESTCASE_V1)
+    let tokenInstance = await deployer.deploy(CaseToken)
     const proxyInstance = await deployer.deploy(
       TokenProxy,
       tokenInstance.address,
@@ -12,7 +12,7 @@ module.exports = (deployer, network, accounts) => {
       "0x"
     )
 
-    tokenInstance = await TESTCASE_V1.at(proxyInstance.address)
+    tokenInstance = await CaseToken.at(proxyInstance.address)
     await tokenInstance.initialize(admin)
   })
 }

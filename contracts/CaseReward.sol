@@ -3,10 +3,10 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./IPancakeSwapOracle.sol";
-import "./TESTCASE_V1.sol";
-import "./TestStaking.sol";
+import "./CaseToken.sol";
+import "./CaseStaking.sol";
 
-contract TestReward is AccessControl {
+contract CaseReward is AccessControl {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -20,7 +20,7 @@ contract TestReward is AccessControl {
         uint8 level
     );
     event ChangedCareerValue(address user, uint256 changeAmount, bool positive);
-    event ReceiveRankReward(address user, uint256 peakReward);
+    event ReceiveRankReward(address user, uint256 caseReward);
 
     modifier regUser(address user) {
         if (!isUser[user]) {
@@ -31,13 +31,13 @@ contract TestReward is AccessControl {
     }
 
     modifier onlySigner() {
-        require(hasRole(SIGNER_ROLE, _msgSender()), "PeakReward: unauthorized signer call!");
+        require(hasRole(SIGNER_ROLE, _msgSender()), "CaseReward: unauthorized signer call!");
         _;
     }
 
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
-    uint256 internal constant PEAK_PRECISION = 10**8;
-    uint256 public constant PEAK_MINT_CAP = 23760000 * PEAK_PRECISION; // 23.76 million CASE
+    uint256 internal constant CASE_PRECISION = 10**8;
+    uint256 public constant CASE_MINT_CAP = 23760000 * CASE_PRECISION; // 23.76 million CASE
     uint256 internal constant BUSD_PRECISION = 10**18;
     uint8 internal constant COMMISSION_LEVELS = 8;
 
@@ -45,25 +45,25 @@ contract TestReward is AccessControl {
     mapping(address => bool) public isUser;
     mapping(address => uint256) public careerValue; // AKA CSP
     mapping(address => uint256) public rankOf;
-    mapping(uint256 => mapping(uint256 => uint256)) public rankReward; // (beforeRank, afterRank) => rewardInPeak
+    mapping(uint256 => mapping(uint256 => uint256)) public rankReward; // (beforeRank, afterRank) => rewardInCase
     mapping(address => mapping(uint256 => uint256)) public downlineRanks; // (referrer, rank) => numReferredUsersWithRank
 
     uint256[] public commissionPercentages;
     uint256[] public commissionStakeRequirements;
-    uint256 public mintedPeakTokens;
+    uint256 public mintedCaseTokens;
 
-    address public marketPeakWallet;
-    TestStaking public peakStaking;
-    TESTCASE_V1 public peakToken;
+    address public marketCaseWallet;
+    CaseStaking public caseStaking;
+    CaseToken public caseToken;
     address public stablecoin;
     IPancakeSwapOracle public oracle;
 
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
 
     constructor(
-        address _marketPeakWallet,
-        address _peakStaking,
-        address _peakToken,
+        address _marketCaseWallet,
+        address _caseStaking,
+        address _caseToken,
         address _stablecoin,
         address _oracle
     ) public {
@@ -79,13 +79,13 @@ contract TestReward is AccessControl {
 
         // initialize commission stake requirements for each level
         commissionStakeRequirements.push(0);
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(4000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(5000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(6000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(7000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(8000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(9000));
-        commissionStakeRequirements.push(PEAK_PRECISION.mul(10000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(4000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(5000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(6000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(7000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(8000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(9000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(10000));
 
         // initialize rank rewards
         for (uint256 i = 0; i < 8; i = i.add(1)) {
@@ -112,13 +112,13 @@ contract TestReward is AccessControl {
             }
         }
 
-        marketPeakWallet = _marketPeakWallet;
-        peakStaking = TestStaking(_peakStaking);
-        peakToken = TESTCASE_V1(_peakToken);
+        marketCaseWallet = _marketCaseWallet;
+        caseStaking = CaseStaking(_caseStaking);
+        caseToken = CaseToken(_caseToken);
         stablecoin = _stablecoin;
         oracle = IPancakeSwapOracle(_oracle);
 
-        _setupRole(SIGNER_ROLE, _peakStaking);
+        _setupRole(SIGNER_ROLE, _caseStaking);
     }
 
     /**
@@ -132,7 +132,7 @@ contract TestReward is AccessControl {
     {
         require(
             users.length == referrers.length,
-            "PeakReward: arrays length are not equal"
+            "CaseReward: arrays length are not equal"
         );
         for (uint256 i = 0; i < users.length; i++) {
             refer(users[i], referrers[i]);
@@ -145,11 +145,11 @@ contract TestReward is AccessControl {
         @param referrer The referrer of `user`
      */
     function refer(address user, address referrer) public onlySigner {
-        require(!isUser[user], "PeakReward: referred is already a user");
-        require(user != referrer, "PeakReward: can't refer self");
+        require(!isUser[user], "CaseReward: referred is already a user");
+        require(user != referrer, "CaseReward: can't refer self");
         require(
             user != address(0) && referrer != address(0),
-            "PeakReward: 0 address"
+            "CaseReward: 0 address"
         );
 
         isUser[user] = true;
@@ -178,7 +178,7 @@ contract TestReward is AccessControl {
         @param referrer The referrer who will receive commission
         @param commissionToken The ERC20 token that the commission is paid in
         @param rawCommission The raw commission that will be distributed amongst referrers
-        @param returnLeftovers If true, leftover commission is returned to the sender. If false, leftovers will be paid to MarketPeak.
+        @param returnLeftovers If true, leftover commission is returned to the sender. If false, leftovers will be paid to MarketCase.
      */
     function payCommission(
         address referrer,
@@ -195,7 +195,7 @@ contract TestReward is AccessControl {
         uint256 commissionLeft = rawCommission;
         uint8 i = 0;
         while (ptr != address(0) && i < COMMISSION_LEVELS) {
-            if (_peakStakeOf(ptr) >= commissionStakeRequirements[i]) {
+            if (_caseStakeOf(ptr) >= commissionStakeRequirements[i]) {
                 // referrer has enough stake, give commission
                 uint256 com = rawCommission.mul(commissionPercentages[i]).div(
                     COMMISSION_RATE
@@ -205,8 +205,8 @@ contract TestReward is AccessControl {
                 }
                 token.safeTransfer(ptr, com);
                 commissionLeft = commissionLeft.sub(com);
-                if (commissionToken == address(peakToken)) {
-                    incrementCareerValueInPeak(ptr, com);
+                if (commissionToken == address(caseToken)) {
+                    incrementCareerValueInCase(ptr, com);
                 } else if (commissionToken == stablecoin) {
                     incrementCareerValueInBusd(ptr, com);
                 }
@@ -223,8 +223,8 @@ contract TestReward is AccessControl {
             token.safeTransfer(msg.sender, commissionLeft);
             return commissionLeft;
         } else {
-            // give leftovers to MarketPeak wallet
-            token.safeTransfer(marketPeakWallet, commissionLeft);
+            // give leftovers to MarketCase wallet
+            token.safeTransfer(marketCaseWallet, commissionLeft);
             return 0;
         }
     }
@@ -246,23 +246,23 @@ contract TestReward is AccessControl {
     /**
         @notice Increments a user's career value
         @param user The user
-        @param incCVInPeak The CV increase amount, in PEAK tokens
+        @param incCVInCase The CV increase amount, in CASE tokens
      */
-    function incrementCareerValueInPeak(address user, uint256 incCVInPeak)
+    function incrementCareerValueInCase(address user, uint256 incCVInCase)
         public
         regUser(user)
         onlySigner
     {
-        uint256 peakPriceInBusd = _getPeakPriceInBusd();
-        uint256 incCVInBusd = incCVInPeak.mul(peakPriceInBusd).div(
-            PEAK_PRECISION
+        uint256 casePriceInBusd = _getCasePriceInBusd();
+        uint256 incCVInBusd = incCVInCase.mul(casePriceInBusd).div(
+            CASE_PRECISION
         );
         careerValue[user] = careerValue[user].add(incCVInBusd);
         emit ChangedCareerValue(user, incCVInBusd, true);
     }
 
     /**
-        @notice Returns a user's rank in the PeakDeFi system based only on career value
+        @notice Returns a user's rank in the CaseDeFi system based only on career value
         @param user The user whose rank will be queried
      */
     function cvRankOf(address user) public view returns (uint256) {
@@ -294,11 +294,11 @@ contract TestReward is AccessControl {
         uint256 cvRank = cvRankOf(user);
         require(
             cvRank > currentRank,
-            "PeakReward: career value is not enough!"
+            "CaseReward: career value is not enough!"
         );
         require(
             downlineRanks[user][currentRank] >= 2 || currentRank == 0,
-            "PeakReward: downlines count and requirement not passed!"
+            "CaseReward: downlines count and requirement not passed!"
         );
 
         // Target rank always should be +1 rank from current rank
@@ -321,14 +321,14 @@ contract TestReward is AccessControl {
         }
 
         // give user rank reward
-        uint256 rewardInPeak = rankReward[currentRank][targetRank]
-        .mul(PEAK_PRECISION)
-        .div(_getPeakPriceInBusd());
-        if (mintedPeakTokens.add(rewardInPeak) <= PEAK_MINT_CAP) {
+        uint256 rewardInCase = rankReward[currentRank][targetRank]
+        .mul(CASE_PRECISION)
+        .div(_getCasePriceInBusd());
+        if (mintedCaseTokens.add(rewardInCase) <= CASE_MINT_CAP) {
             // mint if under cap, do nothing if over cap
-            mintedPeakTokens = mintedPeakTokens.add(rewardInPeak);
-            peakToken.mint(user, rewardInPeak);
-            emit ReceiveRankReward(user, rewardInPeak);
+            mintedCaseTokens = mintedCaseTokens.add(rewardInCase);
+            caseToken.mint(user, rewardInCase);
+            emit ReceiveRankReward(user, rewardInCase);
         }
     }
 
@@ -341,22 +341,22 @@ contract TestReward is AccessControl {
     }
 
     /**
-        @notice Returns a user's current staked PEAK amount, scaled by `PEAK_PRECISION`.
+        @notice Returns a user's current staked CASE amount, scaled by `CASE_PRECISION`.
         @param user The user whose stake will be queried
      */
-    function _peakStakeOf(address user) internal view returns (uint256) {
-        return peakStaking.userStakeAmount(user);
+    function _caseStakeOf(address user) internal view returns (uint256) {
+        return caseStaking.userStakeAmount(user);
     }
 
     /**
-        @notice Returns the price of PEAK token in Busd, scaled by `BUSD_PRECISION`.
+        @notice Returns the price of CASE token in Busd, scaled by `BUSD_PRECISION`.
      */
-    function _getPeakPriceInBusd() internal returns (uint256) {
+    function _getCasePriceInBusd() internal returns (uint256) {
         oracle.update();
 
         uint256 priceInBUSD = oracle.consult(
-            address(peakToken),
-            PEAK_PRECISION
+            address(caseToken),
+            CASE_PRECISION
         );
         if (priceInBUSD == 0) {
             return BUSD_PRECISION.mul(3).div(10);
