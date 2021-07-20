@@ -1,4 +1,4 @@
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 import "./ERC20.sol";
 import "@openzeppelin/contracts/proxy/TransparentUpgradeableProxy.sol";

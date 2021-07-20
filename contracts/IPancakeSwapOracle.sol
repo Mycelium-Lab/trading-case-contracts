@@ -1,4 +1,4 @@
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 interface IPancakeSwapOracle {
     function update() external returns (bool success);
