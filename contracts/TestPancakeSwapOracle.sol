@@ -10,6 +10,6 @@ contract TestPancakeSwapOracle {
         pure
         returns (uint256 amountOut)
     {
-        return 12 * 10**16; // 1 TEST = 0.12 USDC
+        return 12 * 10**16; // 1 TEST = 0.12 BUSD
     }
 }
