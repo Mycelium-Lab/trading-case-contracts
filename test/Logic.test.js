@@ -1,5 +1,6 @@
 const { assert } = require("chai")
 const { ether } = require("@openzeppelin/test-helpers")
+const BigNumber = require("bignumber.js")
 
 const TokenProxy = artifacts.require("TokenProxy")
 const CaseToken = artifacts.require("CaseToken")
@@ -8,7 +9,7 @@ const CaseReward = artifacts.require("CaseReward")
 const TestPancakeSwapOracle = artifacts.require("TestPancakeSwapOracle")
 
 contract("Test Logic", function (accounts) {
-  const [admin, proxyAdmin, alice, bob, sam] = accounts
+  const [admin, proxyAdmin, alice, bob, sam, john, jack] = accounts
 
   before(async () => {
     // token
@@ -57,8 +58,24 @@ contract("Test Logic", function (accounts) {
         )
       })
     }
-    this.CASE_1000 = 1e4 * 10 ** 8
+
+    this.bnToString = function(bn) {
+      return BigNumber(bn).toFixed(0)
+    }
+
+    this.epsilon = () => 1e-3
+
+    this.epsilon_equal = function(curr, prev) {
+      return BigNumber(curr).eq(prev) || BigNumber(curr).minus(prev).div(prev).abs().lt(this.epsilon())
+    }
+
+    this.CASE_PRECISION = 10 ** 8
+    this.CASE_10 = 1e1 * this.CASE_PRECISION
+    this.CASE_100 = 1e2 * this.CASE_PRECISION
+    this.CASE_1000 = 1e3 * this.CASE_PRECISION
+    this.CASE_10000 = 1e4 * this.CASE_PRECISION
     this.ZERO_ADDR = "0x0000000000000000000000000000000000000000"
+    this.SECONDS_IN_DAY = 86400
   })
 
   describe("Test Staking", () => {
@@ -73,7 +90,7 @@ contract("Test Logic", function (accounts) {
       const ia = await this.caseStaking.getInterestAmount(1000000000, 10)
       assert.deepEqual(ia.toString(), "15055027")
 
-      const ia2 = await this.caseStaking.getInterestAmount(this.CASE_1000, 10)
+      const ia2 = await this.caseStaking.getInterestAmount(this.CASE_10000, 10)
       assert.deepEqual(ia2.toString(), "15082397260")
     })
 
@@ -83,20 +100,18 @@ contract("Test Logic", function (accounts) {
       assert.deepEqual(token, this.proxyInstance.address)
     })
 
-    it("Check staking", async () => {
+    it("Check staking without a referrer", async () => {
       // prepare for staking
       const supplyBefore = await this.tokenInstance.totalSupply()
 
       // mint tokens to alice for staking
-      await this.tokenInstance.mint(alice, this.CASE_1000, {
+      await this.tokenInstance.mint(alice, this.CASE_10000, {
         from: admin,
       })
       await this.tokenInstance.approve(
         this.caseStaking.address,
-        this.CASE_1000,
-        {
-          from: alice,
-        }
+        this.CASE_10000,
+        { from: alice }
       )
       const initBalanceAlice = await this.tokenInstance.balanceOf(alice)
       assert.deepEqual(initBalanceAlice.toString(), "1000000000000")
@@ -104,12 +119,10 @@ contract("Test Logic", function (accounts) {
       // actual staking
       const stakeForDays = 10
       await this.caseStaking.stake(
-        this.CASE_1000,
+        this.CASE_10000,
         stakeForDays,
         this.ZERO_ADDR,
-        {
-          from: alice,
-        }
+        { from: alice }
       )
 
       const supplyAfter = await this.tokenInstance.totalSupply()
@@ -118,9 +131,8 @@ contract("Test Logic", function (accounts) {
 
       const minted = await this.caseStaking.mintedCaseTokens()
       assert.deepEqual(minted.toString(), "15082397260")
-
-      const waitForDays = 10
-      await this.timeTravel(86400 * waitForDays)
+      
+      await this.timeTravel(this.SECONDS_IN_DAY * stakeForDays)
       await this.caseStaking.withdraw(0, { from: alice })
       const balanceAliceAfterWithdrawal = await this.tokenInstance.balanceOf(
         alice
@@ -139,6 +151,36 @@ contract("Test Logic", function (accounts) {
       //     }, 10 * 1000)
       //   })
       // await manualWithdrawAfter()
+    })
+
+    it("Check staking with a referrer", async () => {
+      const stakeForDays = 100
+      const stakeAmount = this.CASE_10
+      
+      await this.tokenInstance.mint(john, this.bnToString(stakeAmount), { from: admin })
+      await this.tokenInstance.approve(this.caseStaking.address, this.bnToString(stakeAmount), { from: john })
+      await this.caseStaking.stake(this.bnToString(stakeAmount), stakeForDays, jack, { from: john })
+
+      const balance0 = BigNumber((await this.tokenInstance.balanceOf(john)))
+      const balance1 = BigNumber((await this.tokenInstance.balanceOf(jack)))
+
+      const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(this.bnToString(stakeAmount), stakeForDays)))
+      const expectedReward0 = BigNumber(expectedInterest).times(0.03) // 3% bonus for the referred
+      const expectedReward1 = BigNumber(expectedInterest).times(0.08) // first level 8% bonus for the referrer
+
+      assert(epsilon_equal(expectedReward0, balance0), "Staker reward incorrect.")
+      assert(epsilon_equal(expectedReward1, balance1), "Referrer reward incorrect.")
+
+      // withdrawing stake #1 (alice was 0)
+      await this.timeTravel(stakeForDays * this.SECONDS_IN_DAY)
+
+      const beforeBalanceA = (await this.tokenInstance.balanceOf(john))
+      await this.caseStaking.withdraw(1, { from: john })
+      const balanceChangeA = BigNumber((await this.tokenInstance.balanceOf(john))).minus(beforeBalanceA)
+      const expectedInterestA = BigNumber((await this.caseStaking.getInterestAmount(bnToString(stakeAmount), stakeForDays)))
+      const actualInterestA = balanceChangeA.minus(stakeAmount)
+      
+      assert(epsilon_equal(actualInterestA, expectedInterestA), "Interest amount incorrect for stake #1")
     })
   })
 
