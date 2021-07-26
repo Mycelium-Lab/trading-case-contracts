@@ -8,7 +8,7 @@ const CaseStaking = artifacts.require("CaseStaking")
 const CaseReward = artifacts.require("CaseReward")
 
 contract("Test Logic", function (accounts) {
-  const [admin, proxyAdmin, alice, bob, sam, john, jack] = accounts
+  const [admin, proxyAdmin, alice, john, jack, bob, sam, kyle, dale, homer, harry] = accounts
 
   before(async () => {
     // token
@@ -68,6 +68,18 @@ contract("Test Logic", function (accounts) {
       return BigNumber(curr).eq(prev) || BigNumber(curr).minus(prev).div(prev).abs().lt(this.epsilon())
     }
 
+    this.setupTokensForStaking = async (give_to, amount) => {
+      await this.tokenInstance.mint(give_to, amount, {
+        from: admin
+      })
+
+      await this.tokenInstance.approve(
+        this.caseStaking.address,
+        amount,
+        { from: give_to }
+      )
+    }
+
     this.CASE_PRECISION = 10 ** 8
     this.CASE_10 = 1e1 * this.CASE_PRECISION
     this.CASE_100 = 1e2 * this.CASE_PRECISION
@@ -104,14 +116,8 @@ contract("Test Logic", function (accounts) {
       const supplyBefore = await this.tokenInstance.totalSupply()
 
       // mint tokens to alice for staking
-      await this.tokenInstance.mint(alice, this.CASE_10000, {
-        from: admin,
-      })
-      await this.tokenInstance.approve(
-        this.caseStaking.address,
-        this.CASE_10000,
-        { from: alice }
-      )
+      await this.setupTokensForStaking(alice, this.CASE_10000)
+
       const initBalanceAlice = await this.tokenInstance.balanceOf(alice)
       assert.deepEqual(initBalanceAlice.toString(), "1000000000000")
 
@@ -156,8 +162,7 @@ contract("Test Logic", function (accounts) {
       const stakeForDays = 100
       const stakeAmount = this.CASE_10
       
-      await this.tokenInstance.mint(john, this.bnToString(stakeAmount), { from: admin })
-      await this.tokenInstance.approve(this.caseStaking.address, this.bnToString(stakeAmount), { from: john })
+      await this.setupTokensForStaking(john, this.bnToString(stakeAmount))
       await this.caseStaking.stake(this.bnToString(stakeAmount), stakeForDays, jack, { from: john })
 
       const balance0 = BigNumber((await this.tokenInstance.balanceOf(john)))
@@ -184,12 +189,20 @@ contract("Test Logic", function (accounts) {
   })
 
   describe("Test reward", () => {
+    // only for testing onlySigner functions if DEFAULT_ADMIN role is specified as admin is CaseReward constructor
+    // before(async () => {
+    //   const signer_role = await this.caseReward.SIGNER_ROLE()
+    //   await this.caseReward.grantRole(signer_role, admin, {
+    //     from: admin
+    //   })
+    // })
+
     it("Calling refer from outside Staking", async () => {
       const errorMsg = "CaseReward: unauthorized signer call!"
       ;(async () => {
         let err = ""
         try {
-          await this.caseReward.refer(bob, sam)
+          await this.caseReward.refer(bob, sam, { from: sam })
         } catch (error) {
           err = error.reason
         }
@@ -198,16 +211,7 @@ contract("Test Logic", function (accounts) {
       ;(async () => {
         let err = ""
         try {
-          await this.caseReward.refer(bob, sam, { from: admin })
-        } catch (error) {
-          err = error.reason
-        }
-        assert.deepEqual(err, errorMsg)
-      })()
-      ;(async () => {
-        let err = ""
-        try {
-          await this.caseReward.refer(bob, sam, { from: admin })
+          await this.caseReward.refer(bob, sam, { from: bob })
         } catch (error) {
           err = error.reason
         }
@@ -254,9 +258,121 @@ contract("Test Logic", function (accounts) {
       assert.deepEqual(mintedStart.toString(), "0")
     })
 
-    it("Check rank of Alice", async () => {
-      const cvRankOfAlice = await this.caseReward.cvRankOf(alice)
-      assert.deepEqual(cvRankOfAlice.toString(), "0")
+    it("Check rank of Bob", async () => {
+      const cvRankOfBob = await this.caseReward.cvRankOf(bob)
+      assert.deepEqual(cvRankOfBob.toString(), "0")
+    })
+
+    it("Check must be only one referrer", async () => {
+      // give tokens to bob
+      await this.setupTokensForStaking(bob, this.CASE_10000)
+      
+      const initJackBalance = await this.tokenInstance.balanceOf(jack)
+      const initAliceBalance = await this.tokenInstance.balanceOf(alice)
+      const stakeForDays = 100
+      // refer is called within staking
+      await this.caseStaking.stake(
+        this.CASE_10000 / 2,
+        stakeForDays,
+        jack,
+        { from: bob }
+      )
+      
+      await this.caseStaking.stake(
+        this.CASE_10000 / 2,
+        stakeForDays,
+        alice,
+        { from: bob }
+      )
+
+      const afterReferJackBalance = await this.tokenInstance.balanceOf(jack)
+      const afterReferAliceBalance = await this.tokenInstance.balanceOf(alice)
+      
+      // since alice cannot be the second referrer, her balance must remain unchanged
+      assert.notDeepEqual(initJackBalance, afterReferJackBalance)
+      assert.deepEqual(initAliceBalance, afterReferAliceBalance)
+
+      const actualReferrer = await this.caseReward.referrerOf(bob)
+      assert.deepEqual(actualReferrer, jack, 'referrer not set correctly')
+    })
+
+    it("Check paying commission", async () => {
+      // give tokens to sam, kyle and dale
+      await this.setupTokensForStaking(sam, this.CASE_10000)
+      await this.setupTokensForStaking(kyle, this.CASE_10000)
+      await this.setupTokensForStaking(dale, this.CASE_10000)
+      await this.setupTokensForStaking(homer, this.CASE_10000)
+
+      const stakeForDays = 100
+
+      // dale has enough stake for all 8 levels, we will test the first two 
+      // (8 and 5 % correspondingly)
+      await this.caseStaking.stake(
+        this.CASE_10000,
+        stakeForDays,
+        this.ZERO_ADDR,
+        { from: dale }
+      )
+
+      await this.caseStaking.stake(
+        this.CASE_10000,
+        stakeForDays,
+        dale,
+        { from: sam }
+      )
+
+      await this.caseStaking.stake(
+        this.CASE_10000,
+        stakeForDays,
+        sam,
+        { from: kyle }
+      )
+
+      await this.caseStaking.stake(
+        this.CASE_10000,
+        stakeForDays,
+        kyle,
+        { from: homer }
+      )
+
+      const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(this.CASE_10000, stakeForDays))) 
+      
+      const afterReferralsKyleBalance = BigNumber((await this.tokenInstance.balanceOf(kyle)))
+      const afterReferralsSamBalance = BigNumber((await this.tokenInstance.balanceOf(sam)))
+      const afterReferralsDaleBalance = BigNumber((await this.tokenInstance.balanceOf(dale)))
+
+      // 0.03 is a referred bonus
+      assert(epsilon_equal(afterReferralsKyleBalance, expectedInterest * (0.08 + 0.03)), 'referral levels balance distribution incorrect')
+      assert(epsilon_equal(afterReferralsSamBalance, expectedInterest * (0.08 + 0.05 + 0.03)), 'referral levels balance distribution incorrect')
+      // date has no referred bonus
+      assert(epsilon_equal(afterReferralsDaleBalance, expectedInterest * (0.08 + 0.05 + 0.025)), 'referral levels balance distribution incorrect')
+    })
+
+    it('Check CV points/rank', async () => {
+      const initCareerValueOfDale = await this.caseReward.careerValue(dale)
+      const initCareerRankOfDale = await this.caseReward.cvRankOf(dale)
+
+      console.log(initCareerValueOfDale.toString(), initCareerRankOfDale.toString())
+
+      const largeStake = this.CASE_10000 * 100
+      const stakeForDays = 100
+
+      await this.setupTokensForStaking(harry, largeStake)
+      await this.caseStaking.stake(
+        largeStake,
+        stakeForDays,
+        dale,
+        { from: harry }
+      )
+
+      const afterCareerValueOfDale = await this.caseReward.careerValue(dale)
+      const afterCareerRankOfDale = await this.caseReward.cvRankOf(dale)
+
+      console.log(afterCareerValueOfDale.toString(), afterCareerRankOfDale.toString())
+    })
+
+    it('Rank up', async () => {
+
     })
   })
 })

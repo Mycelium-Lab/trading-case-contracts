@@ -59,10 +59,17 @@
      // },
      // Useful for deploying to a public network.
      // NB: It's important to wrap the provider as a function.
+     develop: {
+      port: 8545,
+      network_id: '*',
+      accounts: 20,
+      defaultEtherBalance: 50,
+      blockTime: 2
+    },
      kovan: {
       provider: () => new HDWalletProvider(mnemonic, `https://kovan.infura.io/v3/${infuraId}`),
       network_id: 42,
-      gas: 5500000,        // Ropsten has a lower block limit than mainnet
+      gas: 4700000,        // Ropsten has a lower block limit than mainnet
       confirmations: 10,    // # of confs to wait between deployments. (default: 0)
       timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
       skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
