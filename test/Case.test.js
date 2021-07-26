@@ -64,6 +64,13 @@ contract("Test Case Token", function (accounts) {
       allowance = await this.tokenInstance.allowance(alice, bob)
       assert.deepEqual(allowance.toString(), ether("50").toString())
     })
+
+    it("Burn tokens", async () => {
+      let balance = await this.tokenInstance.balanceOf(alice)
+      await this.tokenInstance.burn(ether("100"), { from: alice } )
+      balance = await this.tokenInstance.balanceOf(alice)
+      assert.deepEqual(balance.toString(), "0")
+    })
   })
 
   describe("Deploy and upgrade token contract to V2", () => {
