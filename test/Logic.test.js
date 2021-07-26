@@ -117,7 +117,7 @@ contract("Test Logic", function (accounts) {
       assert.deepEqual(initBalanceAlice.toString(), "1000000000000")
 
       // actual staking
-      const stakeForDays = 10
+      const stakeForDays = 100
       await this.caseStaking.stake(
         this.CASE_10000,
         stakeForDays,
@@ -127,17 +127,17 @@ contract("Test Logic", function (accounts) {
 
       const supplyAfter = await this.tokenInstance.totalSupply()
       assert.deepEqual(supplyBefore.toString(), "0")
-      assert.deepEqual(supplyAfter.toString(), "1015082397260")
+      assert.deepEqual(supplyAfter.toString(), "1155323972602")
 
       const minted = await this.caseStaking.mintedCaseTokens()
-      assert.deepEqual(minted.toString(), "15082397260")
+      assert.deepEqual(minted.toString(), "155323972602")
       
       await this.timeTravel(this.SECONDS_IN_DAY * stakeForDays)
       await this.caseStaking.withdraw(0, { from: alice })
       const balanceAliceAfterWithdrawal = await this.tokenInstance.balanceOf(
         alice
       )
-      assert.deepEqual(balanceAliceAfterWithdrawal.toString(), "1015082397260")
+      assert.deepEqual(balanceAliceAfterWithdrawal.toString(), "1155323972602")
 
       // MANUALLY
       // const manualWithdrawAfter = () =>

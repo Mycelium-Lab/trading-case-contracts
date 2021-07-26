@@ -30,7 +30,7 @@ contract CaseStaking {
     uint256 internal constant DAILY_BASE_REWARD = 15 * (10**14); // dailyBaseReward = 0.0015
     uint256 internal constant DAILY_GROWING_REWARD = 10**12; // dailyGrowingReward = 1e-6
     uint256 internal constant MAX_STAKE_PERIOD = 1000; // Max staking time is 1000 days
-    uint256 internal constant MIN_STAKE_PERIOD = 10; // Min staking time is 10 days
+    uint256 internal constant MIN_STAKE_PERIOD = 30; // Min staking time is 30 days
     uint256 internal constant DAY_IN_SECONDS = 86400;
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant REFERRAL_STAKER_BONUS = 3 * (10**16); // 3%
