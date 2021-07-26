@@ -6,7 +6,6 @@ const TokenProxy = artifacts.require("TokenProxy")
 const CaseToken = artifacts.require("CaseToken")
 const CaseStaking = artifacts.require("CaseStaking")
 const CaseReward = artifacts.require("CaseReward")
-const TestPancakeSwapOracle = artifacts.require("TestPancakeSwapOracle")
 
 contract("Test Logic", function (accounts) {
   const [admin, proxyAdmin, alice, bob, sam, john, jack] = accounts
@@ -23,19 +22,19 @@ contract("Test Logic", function (accounts) {
     await tokenInstance.initialize(admin)
 
     // logic
-    this.testOracle = await TestPancakeSwapOracle.new()
     this.caseStaking = await CaseStaking.new(this.proxyInstance.address)
     this.caseReward = await CaseReward.new(
       admin, // admin wallet acts as a market wallet
       this.caseStaking.address,
       this.proxyInstance.address,
-      "0x8301f2213c0eed49a7e28ae4c3e91722919b8b47", // BUSD testnet
-      this.testOracle.address
     )
 
     await this.caseStaking.init(this.caseReward.address)
     const minter_role = await this.tokenInstance.MINTER_ROLE()
     await this.tokenInstance.grantRole(minter_role, this.caseStaking.address, {
+      from: admin,
+    })
+    await tokenInstance.grantRole(minter_role, this.caseReward.address, {
       from: admin,
     })
 

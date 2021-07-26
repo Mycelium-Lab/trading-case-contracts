@@ -2,7 +2,6 @@ pragma solidity 0.6.2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "./IPancakeSwapOracle.sol";
 import "./CaseToken.sol";
 import "./CaseStaking.sol";
 
@@ -38,7 +37,6 @@ contract CaseReward is AccessControl {
     uint256 internal constant COMMISSION_RATE = 20 * (10**16); // 20%
     uint256 internal constant CASE_PRECISION = 10**8;
     uint256 public constant CASE_MINT_CAP = 23760000 * CASE_PRECISION; // 23.76 million CASE
-    uint256 internal constant BUSD_PRECISION = 10**18;
     uint8 internal constant COMMISSION_LEVELS = 8;
 
     mapping(address => address) public referrerOf;
@@ -55,17 +53,13 @@ contract CaseReward is AccessControl {
     address public marketCaseWallet;
     CaseStaking public caseStaking;
     CaseToken public caseToken;
-    address public stablecoin;
-    IPancakeSwapOracle public oracle;
 
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
 
     constructor(
         address _marketCaseWallet,
         address _caseStaking,
-        address _caseToken,
-        address _stablecoin,
-        address _oracle
+        address _caseToken
     ) public {
         // initialize commission percentages for each level
         commissionPercentages.push(8 * (10**16)); // 8%
@@ -89,34 +83,32 @@ contract CaseReward is AccessControl {
 
         // initialize rank rewards
         for (uint256 i = 0; i < 8; i = i.add(1)) {
-            uint256 rewardInBUSD = 0;
+            uint256 rewardInCase = 0;
             for (uint256 j = i.add(1); j <= 8; j = j.add(1)) {
                 if (j == 1) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(100));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(1000));
                 } else if (j == 2) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(300));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(5000));
                 } else if (j == 3) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(600));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(15000));
                 } else if (j == 4) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(1200));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(50000));
                 } else if (j == 5) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(2400));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(100000));
                 } else if (j == 6) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(7500));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(200000));
                 } else if (j == 7) {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(15000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(300000));
                 } else {
-                    rewardInBUSD = rewardInBUSD.add(BUSD_PRECISION.mul(50000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(500000));
                 }
-                rankReward[i][j] = rewardInBUSD;
+                rankReward[i][j] = rewardInCase;
             }
         }
 
         marketCaseWallet = _marketCaseWallet;
         caseStaking = CaseStaking(_caseStaking);
         caseToken = CaseToken(_caseToken);
-        stablecoin = _stablecoin;
-        oracle = IPancakeSwapOracle(_oracle);
 
         _setupRole(SIGNER_ROLE, _caseStaking);
     }
@@ -205,11 +197,7 @@ contract CaseReward is AccessControl {
                 }
                 token.safeTransfer(ptr, com);
                 commissionLeft = commissionLeft.sub(com);
-                if (commissionToken == address(caseToken)) {
-                    incrementCareerValueInCase(ptr, com);
-                } else if (commissionToken == stablecoin) {
-                    incrementCareerValueInBusd(ptr, com);
-                }
+                incrementCareerValueInCase(ptr, com);
                 emit PayCommission(referrer, ptr, commissionToken, com, i);
             }
 
@@ -232,20 +220,6 @@ contract CaseReward is AccessControl {
     /**
         @notice Increments a user's career value
         @param user The user
-        @param incCV The CV increase amount, in Busd
-     */
-    function incrementCareerValueInBusd(address user, uint256 incCV)
-        public
-        regUser(user)
-        onlySigner
-    {
-        careerValue[user] = careerValue[user].add(incCV);
-        emit ChangedCareerValue(user, incCV, true);
-    }
-
-    /**
-        @notice Increments a user's career value
-        @param user The user
         @param incCVInCase The CV increase amount, in CASE tokens
      */
     function incrementCareerValueInCase(address user, uint256 incCVInCase)
@@ -253,12 +227,8 @@ contract CaseReward is AccessControl {
         regUser(user)
         onlySigner
     {
-        uint256 casePriceInBusd = _getCasePriceInBusd();
-        uint256 incCVInBusd = incCVInCase.mul(casePriceInBusd).div(
-            CASE_PRECISION
-        );
-        careerValue[user] = careerValue[user].add(incCVInBusd);
-        emit ChangedCareerValue(user, incCVInBusd, true);
+        careerValue[user] = careerValue[user].add(incCVInCase);
+        emit ChangedCareerValue(user, incCVInCase, true);
     }
 
     /**
@@ -267,21 +237,21 @@ contract CaseReward is AccessControl {
      */
     function cvRankOf(address user) public view returns (uint256) {
         uint256 cv = careerValue[user];
-        if (cv < BUSD_PRECISION.mul(100)) {
+        if (cv < CASE_PRECISION.mul(100)) {
             return 0;
-        } else if (cv < BUSD_PRECISION.mul(250)) {
+        } else if (cv < CASE_PRECISION.mul(500)) {
             return 1;
-        } else if (cv < BUSD_PRECISION.mul(750)) {
+        } else if (cv < CASE_PRECISION.mul(1500)) {
             return 2;
-        } else if (cv < BUSD_PRECISION.mul(1500)) {
+        } else if (cv < CASE_PRECISION.mul(4000)) {
             return 3;
-        } else if (cv < BUSD_PRECISION.mul(3000)) {
+        } else if (cv < CASE_PRECISION.mul(10000)) {
             return 4;
-        } else if (cv < BUSD_PRECISION.mul(10000)) {
+        } else if (cv < CASE_PRECISION.mul(20000)) {
             return 5;
-        } else if (cv < BUSD_PRECISION.mul(50000)) {
+        } else if (cv < CASE_PRECISION.mul(30000)) {
             return 6;
-        } else if (cv < BUSD_PRECISION.mul(150000)) {
+        } else if (cv < CASE_PRECISION.mul(50000)) {
             return 7;
         } else {
             return 8;
@@ -321,9 +291,7 @@ contract CaseReward is AccessControl {
         }
 
         // give user rank reward
-        uint256 rewardInCase = rankReward[currentRank][targetRank]
-        .mul(CASE_PRECISION)
-        .div(_getCasePriceInBusd());
+        uint256 rewardInCase = rankReward[currentRank][targetRank];
         if (mintedCaseTokens.add(rewardInCase) <= CASE_MINT_CAP) {
             // mint if under cap, do nothing if over cap
             mintedCaseTokens = mintedCaseTokens.add(rewardInCase);
@@ -346,22 +314,5 @@ contract CaseReward is AccessControl {
      */
     function _caseStakeOf(address user) internal view returns (uint256) {
         return caseStaking.userStakeAmount(user);
-    }
-
-    /**
-        @notice Returns the price of CASE token in Busd, scaled by `BUSD_PRECISION`.
-     */
-    function _getCasePriceInBusd() internal returns (uint256) {
-        oracle.update();
-
-        uint256 priceInBUSD = oracle.consult(
-            address(caseToken),
-            CASE_PRECISION
-        );
-        if (priceInBUSD == 0) {
-            return BUSD_PRECISION.mul(3).div(10);
-        }
-
-        return priceInBUSD;
     }
 }
