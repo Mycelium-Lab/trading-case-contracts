@@ -8,7 +8,7 @@ const CaseStaking = artifacts.require("CaseStaking")
 const CaseReward = artifacts.require("CaseReward")
 
 contract("Test Logic", function (accounts) {
-  const [admin, proxyAdmin, alice, john, jack, bob, sam, kyle, dale, homer, harry] = accounts
+  const [admin, proxyAdmin, alice, john, jack, bob, sam, kyle, dale, homer, harry, james, george, edward, ryan, eric, tom, ben, jen, ken] = accounts
 
   before(async () => {
     // token
@@ -349,13 +349,17 @@ contract("Test Logic", function (accounts) {
     })
 
     it('Check CV points/rank', async () => {
-      const initCareerValueOfDale = await this.caseReward.careerValue(dale)
+      const stakeForDays = 100
+      const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(this.CASE_10000, stakeForDays))) 
+
+      const initCareerValueOfDale = BigNumber((await this.caseReward.careerValue(dale)))
       const initCareerRankOfDale = await this.caseReward.cvRankOf(dale)
 
-      console.log(initCareerValueOfDale.toString(), initCareerRankOfDale.toString())
+      assert(this.epsilon_equal(initCareerValueOfDale, expectedInterest * (0.08 + 0.05 + 0.025)), 'career points distribution incorrect')
+      assert.deepEqual(initCareerRankOfDale.toNumber(), 1, 'career rank is set incorrectly')
 
       const largeStake = this.CASE_10000 * 100
-      const stakeForDays = 100
+      const expectedInterestLarge = BigNumber((await this.caseStaking.getInterestAmount(largeStake, stakeForDays))) 
 
       await this.setupTokensForStaking(harry, largeStake)
       await this.caseStaking.stake(
@@ -365,14 +369,105 @@ contract("Test Logic", function (accounts) {
         { from: harry }
       )
 
-      const afterCareerValueOfDale = await this.caseReward.careerValue(dale)
+      const afterCareerValueOfDale = BigNumber((await this.caseReward.careerValue(dale)))
       const afterCareerRankOfDale = await this.caseReward.cvRankOf(dale)
 
-      console.log(afterCareerValueOfDale.toString(), afterCareerRankOfDale.toString())
+      assert(this.epsilon_equal(afterCareerValueOfDale, BigNumber(expectedInterest * (0.08 + 0.05 + 0.025)).plus(BigNumber(expectedInterestLarge * 0.08))), 'career points distribution incorrect')
+      // dale should have appx. 14836,5 points, 10000 < 20000 - rank 5
+      assert.deepEqual(afterCareerRankOfDale.toNumber(), 5, 'career rank is set incorrectly')
     })
 
-    it('Rank up', async () => {
+    it('Check rank up and rewards', async () => {
+      const initDaleBalance = BigNumber((await this.tokenInstance.balanceOf(dale)))
+      const initDaleRank = await this.caseReward.rankOf(dale)
+      assert.deepEqual(initDaleRank.toNumber(), 0)
 
+      await this.caseReward.rankUp(dale)
+      const afterBalance = BigNumber((await this.tokenInstance.balanceOf(dale)))
+      const afterDaleRank = await this.caseReward.rankOf(dale)
+
+      assert.deepEqual(afterDaleRank.toNumber(), 1, 'rank setting incorrect')
+      // dale received a rank reward of 1000 for 0->1
+      assert(this.epsilon_equal(afterBalance.minus(initDaleBalance), BigNumber(this.CASE_1000)), 'rank reward distribution incorrect')
+
+      // fresh new test with james & george, edward, ryan, eric
+      // the goal is james reaching rank 2
+      // ryan and eric are needed only for increasing james' cv points
+      const names = [james, george, edward, ryan, eric]
+
+      const stakeForDays = 100
+      const bigStakeAmount = this.CASE_10000 * 10
+      for (const name of names) {
+        await this.setupTokensForStaking(name, bigStakeAmount)
+      }
+
+      for (const name of names) {
+        let ref = james
+        if (name === james) {
+          ref = this.ZERO_ADDR
+        } 
+        await this.caseStaking.stake(
+          bigStakeAmount,
+          stakeForDays,
+          ref,
+          { from: name }
+        )
+      }
+
+      // give james's referrals two referrals each
+      const subNames = [tom, ben, jen, ken]
+      for (const name of subNames) {
+        await this.setupTokensForStaking(name, bigStakeAmount)
+      }
+
+      for (const name of subNames.slice(0, 2)) {
+        await this.caseStaking.stake(
+          bigStakeAmount,
+          stakeForDays,
+          george,
+          { from: name }
+        )
+      }
+
+      for (const name of subNames.slice(-2)) {
+        await this.caseStaking.stake(
+          bigStakeAmount,
+          stakeForDays,
+          edward,
+          { from: name }
+        )
+      }
+
+      // increase downline ranks [1] of james to 2
+      await this.caseReward.rankUp(george)
+      await this.caseReward.rankUp(edward)
+
+      const initJamesBalance = BigNumber((await this.tokenInstance.balanceOf(james)))
+      const initJamesRank = await this.caseReward.rankOf(james) 
+
+      assert.deepEqual(initJamesRank.toNumber(), 0)
+
+      // rank up james 2 times to rank 2
+      await this.caseReward.rankUp(james)
+      await this.caseReward.rankUp(james)
+
+      const afterRankUpJamesBalance = BigNumber((await this.tokenInstance.balanceOf(james)))
+      const afterRankUpJamesRank = await this.caseReward.rankOf(james) 
+
+      assert.deepEqual(afterRankUpJamesRank.toNumber(), 2, 'rank setting incorrect')
+      // james receives 1000 for reaching rank 1, 5000 for reaching rank 2
+      assert(this.epsilon_equal(afterRankUpJamesBalance.minus(initJamesBalance), BigNumber(this.CASE_1000).plus(BigNumber(this.CASE_1000 * 5))), 'rank reward distribution incorrect')
+
+      // trying to rank up james again
+      ;(async () => {
+        let hasErr = false
+        try {
+          await this.caseReward.rankUp(james)
+        } catch {
+          hasErr = true
+        }
+        assert.deepEqual(hasErr, true, 'ranking up when conditions not satisfied')
+      })()
     })
   })
 })
