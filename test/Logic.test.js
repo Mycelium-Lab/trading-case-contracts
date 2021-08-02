@@ -355,8 +355,8 @@ contract("Test Logic", function (accounts) {
       const initCareerValueOfDale = BigNumber((await this.caseReward.careerValue(dale)))
       const initCareerRankOfDale = await this.caseReward.cvRankOf(dale)
 
-      assert(this.epsilon_equal(initCareerValueOfDale, expectedInterest * (0.08 + 0.05 + 0.025)), 'career points distribution incorrect')
-      assert.deepEqual(initCareerRankOfDale.toNumber(), 1, 'career rank is set incorrectly')
+      assert(this.epsilon_equal(initCareerValueOfDale, BigNumber(expectedInterest * (0.08 + 0.05 + 0.025)).div(100)), 'career points distribution incorrect')
+      assert.deepEqual(initCareerRankOfDale.toNumber(), 0, 'career rank is set incorrectly')
 
       const largeStake = this.CASE_10000 * 100
       const expectedInterestLarge = BigNumber((await this.caseStaking.getInterestAmount(largeStake, stakeForDays))) 
@@ -371,10 +371,10 @@ contract("Test Logic", function (accounts) {
 
       const afterCareerValueOfDale = BigNumber((await this.caseReward.careerValue(dale)))
       const afterCareerRankOfDale = await this.caseReward.cvRankOf(dale)
-
-      assert(this.epsilon_equal(afterCareerValueOfDale, BigNumber(expectedInterest * (0.08 + 0.05 + 0.025)).plus(BigNumber(expectedInterestLarge * 0.08))), 'career points distribution incorrect')
-      // dale should have appx. 14836,5 points, 10000 < 20000 - rank 5
-      assert.deepEqual(afterCareerRankOfDale.toNumber(), 5, 'career rank is set incorrectly')
+      
+      assert(this.epsilon_equal(afterCareerValueOfDale, BigNumber(expectedInterest * (0.08 + 0.05 + 0.025)).div(100).plus(BigNumber(expectedInterestLarge * 0.08).div(100))), 'career points distribution incorrect')
+      // dale should have appx. 148,365 points, 100 < 200 - rank 1
+      assert.deepEqual(afterCareerRankOfDale.toNumber(), 1, 'career rank is set incorrectly')
     })
 
     it('Check rank up and rewards', async () => {
@@ -396,9 +396,9 @@ contract("Test Logic", function (accounts) {
       const names = [james, george, edward, ryan, eric]
 
       const stakeForDays = 100
-      const bigStakeAmount = this.CASE_10000 * 10
+      const largeStake = this.CASE_10000 * 100
       for (const name of names) {
-        await this.setupTokensForStaking(name, bigStakeAmount)
+        await this.setupTokensForStaking(name, largeStake)
       }
 
       for (const name of names) {
@@ -407,7 +407,7 @@ contract("Test Logic", function (accounts) {
           ref = this.ZERO_ADDR
         } 
         await this.caseStaking.stake(
-          bigStakeAmount,
+          largeStake,
           stakeForDays,
           ref,
           { from: name }
@@ -417,12 +417,12 @@ contract("Test Logic", function (accounts) {
       // give james's referrals two referrals each
       const subNames = [tom, ben, jen, ken]
       for (const name of subNames) {
-        await this.setupTokensForStaking(name, bigStakeAmount)
+        await this.setupTokensForStaking(name, largeStake)
       }
 
       for (const name of subNames.slice(0, 2)) {
         await this.caseStaking.stake(
-          bigStakeAmount,
+          largeStake,
           stakeForDays,
           george,
           { from: name }
@@ -431,7 +431,7 @@ contract("Test Logic", function (accounts) {
 
       for (const name of subNames.slice(-2)) {
         await this.caseStaking.stake(
-          bigStakeAmount,
+          largeStake,
           stakeForDays,
           edward,
           { from: name }
@@ -441,6 +441,12 @@ contract("Test Logic", function (accounts) {
       // increase downline ranks [1] of james to 2
       await this.caseReward.rankUp(george)
       await this.caseReward.rankUp(edward)
+
+      const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(largeStake, stakeForDays))) 
+
+      const edBalance = BigNumber((await this.tokenInstance.balanceOf(edward)))
+      // edward received 0.03 * i as a bonus 'with a referrer', 0.08 * 2 * i for his 2 referrers + 1000 as a rank 1 achievment reward
+      assert(this.epsilon_equal(edBalance, BigNumber(expectedInterest * (0.03 + 0.08 + 0.08)).plus(BigNumber(this.CASE_1000))), 'referral balance incorrect')
 
       const initJamesBalance = BigNumber((await this.tokenInstance.balanceOf(james)))
       const initJamesRank = await this.caseReward.rankOf(james) 
@@ -455,8 +461,8 @@ contract("Test Logic", function (accounts) {
       const afterRankUpJamesRank = await this.caseReward.rankOf(james) 
 
       assert.deepEqual(afterRankUpJamesRank.toNumber(), 2, 'rank setting incorrect')
-      // james receives 1000 for reaching rank 1, 5000 for reaching rank 2
-      assert(this.epsilon_equal(afterRankUpJamesBalance.minus(initJamesBalance), BigNumber(this.CASE_1000).plus(BigNumber(this.CASE_1000 * 5))), 'rank reward distribution incorrect')
+      // james receives 1000 for reaching rank 1, 2000 for reaching rank 2
+      assert(this.epsilon_equal(afterRankUpJamesBalance.minus(initJamesBalance), BigNumber(this.CASE_1000).plus(BigNumber(this.CASE_1000 * 2))), 'rank reward distribution incorrect')
 
       // trying to rank up james again
       ;(async () => {

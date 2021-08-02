@@ -121,6 +121,7 @@ contract CaseStaking {
             caseToken.safeApprove(address(caseReward), rawCommission);
             uint256 leftoverAmount = caseReward.payCommission(
                 actualReferrer,
+                msg.sender,
                 address(caseToken),
                 rawCommission,
                 true

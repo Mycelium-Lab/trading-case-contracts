@@ -12,7 +12,7 @@ contract CaseReward is AccessControl {
     event Register(address user, address referrer);
     event RankChange(address user, uint256 oldRank, uint256 newRank);
     event PayCommission(
-        address referrer,
+        address sender,
         address recipient,
         address token,
         uint256 amount,
@@ -73,13 +73,13 @@ contract CaseReward is AccessControl {
 
         // initialize commission stake requirements for each level
         commissionStakeRequirements.push(0);
-        commissionStakeRequirements.push(CASE_PRECISION.mul(4000));
         commissionStakeRequirements.push(CASE_PRECISION.mul(5000));
-        commissionStakeRequirements.push(CASE_PRECISION.mul(6000));
-        commissionStakeRequirements.push(CASE_PRECISION.mul(7000));
-        commissionStakeRequirements.push(CASE_PRECISION.mul(8000));
-        commissionStakeRequirements.push(CASE_PRECISION.mul(9000));
         commissionStakeRequirements.push(CASE_PRECISION.mul(10000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(15000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(17500));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(20000));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(22500));
+        commissionStakeRequirements.push(CASE_PRECISION.mul(25000));
 
         // initialize rank rewards
         for (uint256 i = 0; i < 8; i = i.add(1)) {
@@ -88,17 +88,17 @@ contract CaseReward is AccessControl {
                 if (j == 1) {
                     rewardInCase = rewardInCase.add(CASE_PRECISION.mul(1000));
                 } else if (j == 2) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(5000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(2000));
                 } else if (j == 3) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(15000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(5000));
                 } else if (j == 4) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(50000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(15000));
                 } else if (j == 5) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(100000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(50000));
                 } else if (j == 6) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(200000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(100000));
                 } else if (j == 7) {
-                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(300000));
+                    rewardInCase = rewardInCase.add(CASE_PRECISION.mul(250000));
                 } else {
                     rewardInCase = rewardInCase.add(CASE_PRECISION.mul(500000));
                 }
@@ -168,12 +168,14 @@ contract CaseReward is AccessControl {
     /**
         @notice Distributes commissions to a referrer and their referrers
         @param referrer The referrer who will receive commission
+        @param sender The address that begins the referral chain (staker)
         @param commissionToken The ERC20 token that the commission is paid in
         @param rawCommission The raw commission that will be distributed amongst referrers
         @param returnLeftovers If true, leftover commission is returned to the sender. If false, leftovers will be paid to MarketCase.
      */
     function payCommission(
         address referrer,
+        address sender,
         address commissionToken,
         uint256 rawCommission,
         bool returnLeftovers
@@ -197,8 +199,9 @@ contract CaseReward is AccessControl {
                 }
                 token.safeTransfer(ptr, com);
                 commissionLeft = commissionLeft.sub(com);
-                incrementCareerValueInCase(ptr, com);
-                emit PayCommission(referrer, ptr, commissionToken, com, i);
+                // increment CSP, according to the proportion 1 CSP = 100 CASE
+                incrementCareerValueInCase(ptr, com.div(100));
+                emit PayCommission(sender, ptr, commissionToken, com, i);
             }
 
             ptr = referrerOf[ptr];
@@ -232,26 +235,26 @@ contract CaseReward is AccessControl {
     }
 
     /**
-        @notice Returns a user's rank in the CaseDeFi system based only on career value
+        @notice Returns a user's rank in the DefiCase system based only on career value
         @param user The user whose rank will be queried
      */
     function cvRankOf(address user) public view returns (uint256) {
         uint256 cv = careerValue[user];
         if (cv < CASE_PRECISION.mul(100)) {
             return 0;
-        } else if (cv < CASE_PRECISION.mul(500)) {
+        } else if (cv < CASE_PRECISION.mul(200)) {
             return 1;
-        } else if (cv < CASE_PRECISION.mul(1500)) {
+        } else if (cv < CASE_PRECISION.mul(500)) {
             return 2;
-        } else if (cv < CASE_PRECISION.mul(4000)) {
+        } else if (cv < CASE_PRECISION.mul(1500)) {
             return 3;
-        } else if (cv < CASE_PRECISION.mul(10000)) {
+        } else if (cv < CASE_PRECISION.mul(5000)) {
             return 4;
-        } else if (cv < CASE_PRECISION.mul(20000)) {
+        } else if (cv < CASE_PRECISION.mul(10000)) {
             return 5;
-        } else if (cv < CASE_PRECISION.mul(30000)) {
-            return 6;
         } else if (cv < CASE_PRECISION.mul(50000)) {
+            return 6;
+        } else if (cv < CASE_PRECISION.mul(150000)) {
             return 7;
         } else {
             return 8;
