@@ -7,8 +7,15 @@ const CaseToken = artifacts.require("CaseToken")
 const CaseStaking = artifacts.require("CaseStaking")
 const CaseReward = artifacts.require("CaseReward")
 
+const { 
+  insertLevelOrder, 
+  getNodeHeight, 
+  takeActionForCurrentLevelOrder, 
+  takeActionForCurrentLevelOrderReverse 
+} = require('../util/BinaryTree')
+
 contract("Test Logic", function (accounts) {
-  const [admin, proxyAdmin, alice, john, jack, bob, sam, kyle, dale, homer, harry, james, george, edward, ryan, eric, tom, ben, jen, ken] = accounts
+  const [admin, proxyAdmin, alice, john, jack, bob, sam, kyle, dale, homer, harry, james, george, edward, ryan, eric, tom, ben, jen, ken, ...rest] = accounts
 
   before(async () => {
     // token
@@ -474,6 +481,67 @@ contract("Test Logic", function (accounts) {
         }
         assert.deepEqual(hasErr, true, 'ranking up when conditions not satisfied')
       })()
+    })
+
+    it ('Deep rank test', async () => {
+      // how many referral level deep to test
+      const levelsToTest = 2
+
+      const largeStake = this.CASE_10000 * 100
+      const stakeForDays = 1000
+      const deepRankTestAccounts = rest.slice(0, (2 ** (levelsToTest + 1)) - 1)
+
+      const levelActionStake = async (node) => {
+          const referrer = !node.parent_data ? this.ZERO_ADDR : node.parent_data.address
+          await this.caseStaking.stake(
+            largeStake,
+            stakeForDays,
+            referrer,
+            { from: node.data.address }
+          )
+      }
+
+      const levelActionRankUp = async (node) => {
+        const numberOfRankUps = getNodeHeight(node) - 1
+        for (let index = 0; index < numberOfRankUps; index++) {
+          await this.caseReward.rankUp(
+            node.data.address,
+            { from: node.data.address }
+          )
+        }
+      }
+
+      for (const account of deepRankTestAccounts) {
+        await this.setupTokensForStaking(account, largeStake)
+      }
+
+      // init tree
+      let root
+      root = insertLevelOrder(deepRankTestAccounts, root, 0, null)
+
+      // staking according to the tree hierarchy
+      await takeActionForCurrentLevelOrder(root, levelActionStake)
+
+      // expected interest of 1 staking
+      const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(largeStake, stakeForDays))) 
+
+      // assert that referral reward are right
+      const balanceOf0 = BigNumber((await this.tokenInstance.balanceOf(deepRankTestAccounts[0])))
+      // longer bonus changes over time, so best to tolerate a slippage
+      const acceptable_slippage = BigNumber(2000 * this.CASE_PRECISION)
+      assert.isTrue(balanceOf0.minus(BigNumber(expectedInterest * (0.08 * 2 + 0.05 * 4))).lt(acceptable_slippage), 'reward distribution incorrect')
+
+      // ranking up according to the reserve tree hierarchy
+      await takeActionForCurrentLevelOrderReverse(root, levelActionRankUp)
+
+      // assert that career value of the freshest user is 0
+      const careerValueOfLast = await this.caseReward.careerValue(deepRankTestAccounts[deepRankTestAccounts.length - 1])
+      assert.deepEqual(careerValueOfLast.toNumber(), 0, 'career value of the freshest user is not 0')
+
+      // assert that career value of the first user is right
+      const careerValueOfFirst = BigNumber((await this.caseReward.careerValue(deepRankTestAccounts[0])))
+      const acceptable_slippage_cv = acceptable_slippage.div(100) 
+      assert.isTrue(careerValueOfFirst.minus(BigNumber(expectedInterest * (0.08 * 2 + 0.05 * 4)).div(100)).lt(acceptable_slippage_cv), 'career value distribution incorrect')
     })
   })
 })
