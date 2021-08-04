@@ -62,7 +62,7 @@
      develop: {
       port: 8545,
       network_id: '*',
-      accounts: 150,
+      accounts: 600,
       defaultEtherBalance: 50,
       blockTime: 2
     },
@@ -92,7 +92,7 @@
  
    // Set default mocha options here, use special reporters etc.
    mocha: {
-     // timeout: 100000
+     timeout: 36000000
    },
  
    // Configure your compilers

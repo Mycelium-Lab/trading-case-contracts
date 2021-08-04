@@ -485,9 +485,17 @@ contract("Test Logic", function (accounts) {
 
     it ('Deep rank test', async () => {
       // how many referral level deep to test
-      const levelsToTest = 2
+      const levelsToTest = 6
+      const rewardShares = [0.08, 0.05, 0.025, 0.015, 0.01, 0.01, 0.005, 0.005]
 
-      const largeStake = this.CASE_10000 * 100
+      const calculateTreeRewardShare = (maxLevel) => (
+        rewardShares.slice(0, maxLevel).reduce((acc, el, idx) => {
+          acc += el * (2 ** (idx + 1))
+          return acc
+        }, 0)
+      )
+
+      const largeStake = this.CASE_10000 * 40
       const stakeForDays = 1000
       const deepRankTestAccounts = rest.slice(0, (2 ** (levelsToTest + 1)) - 1)
 
@@ -501,9 +509,9 @@ contract("Test Logic", function (accounts) {
           )
       }
 
-      const levelActionRankUp = async (node) => {
+      const levelActionRankUp = async (node, currentPass) => {
         const numberOfRankUps = getNodeHeight(node) - 1
-        for (let index = 0; index < numberOfRankUps; index++) {
+        if (numberOfRankUps >= currentPass) {
           await this.caseReward.rankUp(
             node.data.address,
             { from: node.data.address }
@@ -511,6 +519,7 @@ contract("Test Logic", function (accounts) {
         }
       }
 
+      // give everyone enough tokens for staking
       for (const account of deepRankTestAccounts) {
         await this.setupTokensForStaking(account, largeStake)
       }
@@ -524,15 +533,20 @@ contract("Test Logic", function (accounts) {
 
       // expected interest of 1 staking
       const expectedInterest = BigNumber((await this.caseStaking.getInterestAmount(largeStake, stakeForDays))) 
+      const rewardTreeShare = calculateTreeRewardShare(levelsToTest)
 
       // assert that referral reward are right
-      const balanceOf0 = BigNumber((await this.tokenInstance.balanceOf(deepRankTestAccounts[0])))
-      // longer bonus changes over time, so best to tolerate a slippage
-      const acceptable_slippage = BigNumber(2000 * this.CASE_PRECISION)
-      assert.isTrue(balanceOf0.minus(BigNumber(expectedInterest * (0.08 * 2 + 0.05 * 4))).lt(acceptable_slippage), 'reward distribution incorrect')
+      const balanceOfFirst = BigNumber((await this.tokenInstance.balanceOf(deepRankTestAccounts[0])))
+      // console.log(balanceOfFirst.toNumber() / this.CASE_PRECISION)
 
-      // ranking up according to the reserve tree hierarchy
-      await takeActionForCurrentLevelOrderReverse(root, levelActionRankUp)
+      // longer bonus changes over time, so best to tolerate a slippage
+      const acceptable_slippage = BigNumber(100000 * this.CASE_PRECISION)
+      assert.isTrue(balanceOfFirst.minus(BigNumber(expectedInterest * rewardTreeShare)).lt(acceptable_slippage), 'reward distribution incorrect')
+
+      // ranking up according to the tree hierarchy, one rank up for each node per traversal, total time complexity — O(nlog(n))
+      for (let index = 1; index <= levelsToTest; index++) {
+        await takeActionForCurrentLevelOrder(root, levelActionRankUp, index)
+      }
 
       // assert that career value of the freshest user is 0
       const careerValueOfLast = await this.caseReward.careerValue(deepRankTestAccounts[deepRankTestAccounts.length - 1])
@@ -540,8 +554,17 @@ contract("Test Logic", function (accounts) {
 
       // assert that career value of the first user is right
       const careerValueOfFirst = BigNumber((await this.caseReward.careerValue(deepRankTestAccounts[0])))
+      // console.log(careerValueOfFirst.toNumber() / this.CASE_PRECISION)
       const acceptable_slippage_cv = acceptable_slippage.div(100) 
-      assert.isTrue(careerValueOfFirst.minus(BigNumber(expectedInterest * (0.08 * 2 + 0.05 * 4)).div(100)).lt(acceptable_slippage_cv), 'career value distribution incorrect')
+      assert.isTrue(careerValueOfFirst.minus(BigNumber(expectedInterest * rewardTreeShare).div(100)).lt(acceptable_slippage_cv), 'career value distribution incorrect')
+
+      // // LOG TO CHECK
+      // const cvRankOfFirst = await this.caseReward.cvRankOf(deepRankTestAccounts[0])
+      // console.log(cvRankOfFirst.toString())
+
+      // // LOG TO CHECK
+      // const rankOfFirst = await this.caseReward.rankOf(deepRankTestAccounts[0])
+      // console.log(rankOfFirst.toString())
     })
   })
 })

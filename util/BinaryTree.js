@@ -23,30 +23,30 @@ const insertLevelOrder = (arr, root, i, parent_data) => {
 
 // level order tree traversal
 
-const takeActionForCurrentLevelOrder = async (root, action) => {
+const takeActionForCurrentLevelOrder = async (root, action, currentPass) => {
 	let h = getNodeHeight(root)
 	for (let i = 1; i < h+1; i++) {
-		await takeActionForCurrentLevel(root, i, action)
+		await takeActionForCurrentLevel(root, i, action, currentPass)
 	}
 }
 
-const takeActionForCurrentLevelOrderReverse = async (root, action) => {
+const takeActionForCurrentLevelOrderReverse = async (root, action, currentPass) => {
 	let h = getNodeHeight(root)
 	for (let i = h; i > 0; i--) {
-		await takeActionForCurrentLevel(root, i, action)
+		await takeActionForCurrentLevel(root, i, action, currentPass)
 	}
 }
 
-const takeActionForCurrentLevel = async (root, level, action) => {
+const takeActionForCurrentLevel = async (root, level, action, currentPass) => {
 	if (!root) {
 		return
 	}
 	if (level == 1) {
-		await action(root)
+		await action(root, currentPass)
 	}
 	else if (level > 1) {
-		await takeActionForCurrentLevel(root.left , level-1, action)
-		await takeActionForCurrentLevel(root.right , level-1, action)
+		await takeActionForCurrentLevel(root.left , level-1, action, currentPass)
+		await takeActionForCurrentLevel(root.right , level-1, action, currentPass)
 	}
 }
 
