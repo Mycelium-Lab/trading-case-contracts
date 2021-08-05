@@ -287,10 +287,6 @@ contract CaseReward is AccessControl {
                 targetRank
             ]
             .add(1);
-            downlineRanks[referrer][currentRank] = downlineRanks[referrer][
-                currentRank
-            ]
-            .sub(1);
         }
 
         // give user rank reward
