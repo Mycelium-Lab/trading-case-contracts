@@ -18,13 +18,11 @@
  *
  */
 
- const HDWalletProvider = require('@truffle/hdwallet-provider');
- // const infuraKey = "fj4jll3k.....";
- //
- // const fs = require('fs');
- const mnemonic = require('./secrets.json').mnenonic
- const infuraId = require('./secrets.json').projectId
- 
+ require('dotenv').config()
+ const HDWalletProvider = require('@truffle/hdwallet-provider')
+
+ const { MNEMONIC, INFURA_PID } = process.env
+
  module.exports = {
    /**
     * Networks define how you connect to your ethereum client and let you set the
@@ -67,7 +65,7 @@
       blockTime: 2
     },
      kovan: {
-      provider: () => new HDWalletProvider(mnemonic, `https://kovan.infura.io/v3/${infuraId}`),
+      provider: () => new HDWalletProvider(MNEMONIC, `https://kovan.infura.io/v3/${INFURA_PID}`),
       network_id: 42,
       gas: 4700000,        // Ropsten has a lower block limit than mainnet
       confirmations: 10,    // # of confs to wait between deployments. (default: 0)
@@ -75,7 +73,7 @@
       skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
      },
      bscTestnet: {
-       provider: () => new HDWalletProvider(mnemonic, 'https://data-seed-prebsc-1-s2.binance.org:8545/'),
+       provider: () => new HDWalletProvider(MNEMONIC, 'https://data-seed-prebsc-1-s2.binance.org:8545/'),
        network_id: 97,       // Ropsten's id
        gas: 5500000,        // Ropsten has a lower block limit than mainnet
        confirmations: 10,    // # of confs to wait between deployments. (default: 0)
@@ -84,7 +82,7 @@
      },
      // Useful for private networks
      // private: {
-     // provider: () => new HDWalletProvider(mnemonic, `https://network.io`),
+     // provider: () => new HDWalletProvider(MNEMONIC, `https://network.io`),
      // network_id: 2111,   // This network is yours, in the cloud.
      // production: true    // Treats this network as if it was a public net. (default: false)
      // }
@@ -119,5 +117,5 @@
    db: {
      enabled: false
    }
- };
+ }
  
