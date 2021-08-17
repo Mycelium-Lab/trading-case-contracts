@@ -1,23 +1,14 @@
-const TokenProxy = artifacts.require("TokenProxy")
 const CaseToken = artifacts.require("CaseToken")
+const TokenProxy = artifacts.require("TokenProxy")
 const CaseStaking = artifacts.require("CaseStaking")
 const CaseReward = artifacts.require("CaseReward")
 
 module.exports = (deployer, network, accounts) => {
-  const [admin, proxyAdmin] = accounts
-  deployer.then(async () => {
-    let tokenInstance = await deployer.deploy(CaseToken)
-    const proxyInstance = await deployer.deploy(
-      TokenProxy,
-      tokenInstance.address,
-      proxyAdmin,
-      "0x"
-    )
-
-    tokenInstance = await CaseToken.at(proxyInstance.address)
-    await tokenInstance.initialize(admin)
-    
-    // logic
+  const [admin] = accounts
+  deployer.then(async () => { 
+    const proxyInstance = await TokenProxy.deployed()
+    const tokenInstance = await CaseToken.at(proxyInstance.address)
+  
     const caseStaking = await deployer.deploy(CaseStaking, proxyInstance.address)
     const caseReward = await deployer.deploy(
       CaseReward,
@@ -25,7 +16,7 @@ module.exports = (deployer, network, accounts) => {
       caseStaking.address,
       proxyInstance.address,
     )
-
+  
     await caseStaking.init(caseReward.address)
     const minter_role = await tokenInstance.MINTER_ROLE()
     await tokenInstance.grantRole(minter_role, caseStaking.address, {
