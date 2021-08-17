@@ -80,6 +80,15 @@
        timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
        skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
      },
+     bsc: {
+      provider: () => new HDWalletProvider(MNEMONIC, 'https://bsc-dataseed.binance.org/'),
+      network_id: 56,  
+      gas: 9500000,  
+      gasPrice: '10000000000',
+      confirmations: 10,    // # of confs to wait between deployments. (default: 0)
+      timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
+      skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
+    },
      // Useful for private networks
      // private: {
      // provider: () => new HDWalletProvider(MNEMONIC, `https://network.io`),
