@@ -206,7 +206,7 @@ contract("Test Logic", function (accounts) {
 
     it("Calling refer from outside Staking", async () => {
       const errorMsg = "CaseReward: unauthorized signer call!"
-      ;(async () => {
+      await (async () => {
         let err = ""
         try {
           await this.caseReward.refer(bob, sam, { from: sam })
@@ -215,7 +215,7 @@ contract("Test Logic", function (accounts) {
         }
         assert.deepEqual(err, errorMsg)
       })()
-      ;(async () => {
+      await (async () => {
         let err = ""
         try {
           await this.caseReward.refer(bob, sam, { from: bob })
@@ -228,7 +228,7 @@ contract("Test Logic", function (accounts) {
 
     it("Calling rank up with no cv", async () => {
       const errorMsg = "CaseReward: career value is not enough!"
-      ;(async () => {
+      await (async () => {
         let err = ""
         try {
           await this.caseReward.rankUp(bob, { from: bob })
@@ -237,7 +237,7 @@ contract("Test Logic", function (accounts) {
         }
         assert.deepEqual(err, errorMsg)
       })()
-      ;(async () => {
+      await (async () => {
         let err = ""
         try {
           await this.caseReward.rankUp(alice, { from: alice })
@@ -472,7 +472,7 @@ contract("Test Logic", function (accounts) {
       assert(this.epsilon_equal(afterRankUpJamesBalance.minus(initJamesBalance), BigNumber(this.CASE_1000).plus(BigNumber(this.CASE_1000 * 2))), 'rank reward distribution incorrect')
 
       // trying to rank up james again
-      ;(async () => {
+      await (async () => {
         let hasErr = false
         try {
           await this.caseReward.rankUp(james)
